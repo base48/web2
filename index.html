@@ -82,7 +82,7 @@
                     <span class="hide-on-mobile hide-on-tablet" aria-hidden="true">|</span>
                     <li class="small hide-on-tablet"><a href="https://wiki.base48.cz/" target="_blank" rel="noopener">Wiki <i
                                 class="fas fa-external-link-alt"></i></a></li>
-                    <li class="small"><a href="https://cryptpad.cz/calendar/#/2/calendar/view/WTp4sfV-5bUaDwQIyyIT7XIBZFS9Yg-rdKAtnCCmfPE/" target="_blank" rel="noopener">Kalendář <i
+                    <li class="small"><a href="https://nextcloud.at.base48.cz/apps/calendar/embed/oM82tg3RJDLDyZbz" target="_blank" rel="noopener">Kalendář <i
                                 class="fas fa-external-link-alt"></i></a></li>
                     <li class="small hide-on-tablet"><a href="https://members.base48.cz/" target="_blank" rel="noopener">Členský portál <i
                                 class="fas fa-external-link-alt"></i></a></li>
@@ -189,6 +189,12 @@
                             </div>
                         </div>
                     </div>
+                    <div class="calendar-embed" style="order: 3;">
+                        <h3>Nadcházející akce</h3>
+                        <div id="calendar-events">
+                            <p class="calendar-loading">Načítám kalendář...</p>
+                        </div>
+                    </div>
             </section>
 
             <section id="kontakt">
@@ -265,7 +271,7 @@
                                     <i class="fas fa-book"></i>
                                     <span>wiki<span class="hide-on-mobile">.base48.cz</span></span>
                                 </a>
-                                <a href="https://cryptpad.cz/calendar/#/2/calendar/view/WTp4sfV-5bUaDwQIyyIT7XIBZFS9Yg-rdKAtnCCmfPE/" target="_blank" rel="noopener" class="button">
+                                <a href="https://nextcloud.at.base48.cz/apps/calendar/embed/oM82tg3RJDLDyZbz" target="_blank" rel="noopener" class="button">
                                     <i class="fas fa-calendar-alt"></i>
                                     <span>Kalendář akcí</span>
                                 </a>
@@ -521,6 +527,7 @@
 
     </div>
     <script src="/js/main.js"></script>
+    <script src="/js/calendar.js"></script>
 
     <!-- Lightbox -->
     <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Galerie obrázků">
