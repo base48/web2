@@ -484,11 +484,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const lang = isCzech ? 'czech' : 'english';
         // Note on how to obtain the following JSON file, CURL example:
-        // curl -k -H "Authorization: Bearer YOUR_TOKEN_HERE" -H "Content-Type: application/json" https://ha.base48.cz:8443/api/states/sensor.base_status -o api/base_status.json
+        // curl -k -H https://ha.base48.cz/api/spaceapi -o api/base_status.json
 
         // Try to fetch the base status (with cache busting)
         const cacheBuster = Date.now();
-        fetch(`api/base_status.json?t=${cacheBuster}`, {
+        fetch(`https://ha.base48.cz/api/spaceapi?t=${cacheBuster}`, {
             cache: 'no-cache',
             headers: {
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -503,8 +503,8 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .then(data => {
                 // Check if the base is open based on the state field
-                // New API format: "on" means open, "off" means closed
-                const isOpen = data.state === 'on';
+                // New API format: true/false
+                const isOpen = data.state;
 
                 statusElement.textContent = isOpen ? texts[lang].open : texts[lang].closed;
                 statusElement.className = `base-status ${isOpen ? 'open' : 'closed'}`;
