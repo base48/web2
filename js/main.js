@@ -483,12 +483,10 @@ document.addEventListener('DOMContentLoaded', function () {
         };
 
         const lang = isCzech ? 'czech' : 'english';
-        // Note on how to obtain the following JSON file, CURL example:
-        // curl -k -H https://ha.base48.cz/api/spaceapi -o api/base_status.json
 
         // Try to fetch the base status (with cache busting)
         const cacheBuster = Date.now();
-        fetch(`https://ha.base48.cz/api/spaceapi?t=${cacheBuster}`, {
+        fetch(`/api/spaceapi?t=${cacheBuster}`, {
             cache: 'no-cache',
             headers: {
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
