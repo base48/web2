@@ -483,14 +483,14 @@ document.addEventListener('DOMContentLoaded', function () {
         };
 
         const lang = isCzech ? 'czech' : 'english';
-        // nginx proxies /api/spaceapi to Home Assistant, so this is same-origin.
-        // curl https://base48.cz/api/spaceapi
+        // Same-origin SpaceAPI 15 feed, regenerated every minute from the same
+        // Home Assistant sensor. curl https://base48.cz/api/base_status_spaceapi.json
 
         // Try to fetch the base status (with cache busting)
         const cacheBuster = Date.now();
-        // No custom headers: they would trigger a CORS preflight, which HA
-        // answers with 403. The ?t= above is enough to bust the cache.
-        fetch(`/api/spaceapi?t=${cacheBuster}`, {
+        // No custom headers: they would make this non-simple and trigger a
+        // CORS preflight. The ?t= above is enough to bust the cache.
+        fetch(`/api/base_status_spaceapi.json?t=${cacheBuster}`, {
             cache: 'no-cache'
         })
             .then(response => {
@@ -501,7 +501,7 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .then(data => {
                 // Check if the base is open based on the state field
-                // SpaceAPI 0.13: state is {"open": bool, "lastchange": ts}
+                // SpaceAPI: state is {"open": bool, "lastchange": ts}
                 const isOpen = data.state.open;
 
                 statusElement.textContent = isOpen ? texts[lang].open : texts[lang].closed;
