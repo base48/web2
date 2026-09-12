@@ -483,17 +483,15 @@ document.addEventListener('DOMContentLoaded', function () {
         };
 
         const lang = isCzech ? 'czech' : 'english';
-        // Note on how to obtain the following JSON file, CURL example:
-        // curl -k -H https://ha.base48.cz/api/spaceapi -o api/base_status.json
+        // Same-origin SpaceAPI 15 feed, regenerated every minute from the same
+        // Home Assistant sensor. curl https://base48.cz/api/base_status_spaceapi.json
 
         // Try to fetch the base status (with cache busting)
         const cacheBuster = Date.now();
-        fetch(`https://ha.base48.cz/api/spaceapi?t=${cacheBuster}`, {
-            cache: 'no-cache',
-            headers: {
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache'
-            }
+        // No custom headers: they would make this non-simple and trigger a
+        // CORS preflight. The ?t= above is enough to bust the cache.
+        fetch(`/api/base_status_spaceapi.json?t=${cacheBuster}`, {
+            cache: 'no-cache'
         })
             .then(response => {
                 if (!response.ok) {
@@ -503,8 +501,8 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .then(data => {
                 // Check if the base is open based on the state field
-                // New API format: true/false
-                const isOpen = data.state;
+                // SpaceAPI: state is {"open": bool, "lastchange": ts}
+                const isOpen = data.state.open;
 
                 statusElement.textContent = isOpen ? texts[lang].open : texts[lang].closed;
                 statusElement.className = `base-status ${isOpen ? 'open' : 'closed'}`;
