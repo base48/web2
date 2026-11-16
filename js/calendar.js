@@ -1,34 +1,19 @@
 /**
  * Lightweight public Nextcloud calendar widget.
  * Fetches jCal (RFC 7265) export and renders upcoming events.
- * Handles RRULE recurrence, recurrence-id overrides, STATUS and COLOR.
+ * Recurrence (RRULE incl. BYDAY, EXDATE, RECURRENCE-ID overrides, time zones)
+ * is expanded by ical.js 2.2.1 (MPL-2.0, https://github.com/kewisch/ical.js),
+ * vendored in /vendor/ical/ and loaded only on pages with the widget.
  */
 (function () {
     'use strict';
 
     var CALENDAR_URL = 'https://nextcloud.at.base48.cz/remote.php/dav/public-calendars/oM82tg3RJDLDyZbz?export&accept=jcal';
     var CALENDAR_LINK = 'https://nextcloud.at.base48.cz/apps/calendar/embed/oM82tg3RJDLDyZbz';
+    var ICAL_URL = '/vendor/ical/ical.min.js';
     var MAX_EVENTS = 4;
     var LOOKAHEAD_DAYS = 90;
-
-    // --- jCal helpers ---
-
-    function getProp(props, name) {
-        for (var i = 0; i < props.length; i++) {
-            if (props[i][0] === name) return props[i];
-        }
-        return null;
-    }
-
-    function parseDate(prop) {
-        if (!prop) return null;
-        var type = prop[2];
-        var val = prop[3];
-        if (type === 'date') {
-            return { date: new Date(val + 'T00:00:00'), allDay: true };
-        }
-        return { date: new Date(val), allDay: false };
-    }
+    var MAX_OCCURRENCES = 5000; // safety cap per recurring series
 
     function escapeHTML(str) {
         var el = document.createElement('span');
@@ -36,66 +21,28 @@
         return el.innerHTML;
     }
 
-    // --- Extract event data from jCal property array ---
+    function getStatus(comp) {
+        var status = comp.getFirstPropertyValue('status');
+        return status ? String(status).toUpperCase() : 'CONFIRMED';
+    }
 
-    function extractEvent(props) {
-        var dtstart = getProp(props, 'dtstart');
-        if (!dtstart) return null;
-        var parsed = parseDate(dtstart);
+    // --- Display data from an ICAL.Event (series master or override) ---
 
-        var dtend = getProp(props, 'dtend');
-        var sumProp = getProp(props, 'summary');
-        var locProp = getProp(props, 'location');
-        var descProp = getProp(props, 'description');
-        var statusProp = getProp(props, 'status');
-        var colorProp = getProp(props, 'color');
-        var uidProp = getProp(props, 'uid');
-
-        var description = descProp ? descProp[3] : '';
+    function toEvent(item, startDate, endDate) {
+        var description = item.description || '';
         var urlMatch = description.match(/https?:\/\/[^\s,;)]+/);
 
         return {
-            start: parsed.date,
-            end: dtend ? parseDate(dtend).date : null,
-            allDay: parsed.allDay,
-            summary: sumProp ? sumProp[3] : '(bez názvu)',
-            location: locProp ? locProp[3] : '',
+            start: startDate.toJSDate(),
+            end: endDate ? endDate.toJSDate() : null,
+            allDay: startDate.isDate,
+            summary: item.summary || '(bez názvu)',
+            location: item.location || '',
             url: urlMatch ? urlMatch[0] : '',
-            status: statusProp ? statusProp[3].toUpperCase() : 'CONFIRMED',
-            color: colorProp ? colorProp[3] : '',
-            uid: uidProp ? uidProp[3] : ''
+            status: getStatus(item.component),
+            color: item.component.getFirstPropertyValue('color') || '',
+            uid: item.uid || ''
         };
-    }
-
-    // --- RRULE expansion ---
-
-    function expandRecurrence(start, end, allDay, rrule, limit) {
-        var instances = [];
-        var freq = (rrule.freq || '').toUpperCase();
-        var interval = parseInt(rrule.interval) || 1;
-        var count = rrule.count ? parseInt(rrule.count) : Infinity;
-        var until = rrule.until ? new Date(rrule.until) : limit;
-        if (until > limit) until = limit;
-        var duration = (start && end) ? end.getTime() - start.getTime() : 0;
-        var cur = new Date(start);
-        var n = 0;
-
-        while (cur <= until && n < count && n < 500) {
-            instances.push({
-                start: new Date(cur),
-                end: duration ? new Date(cur.getTime() + duration) : null,
-                allDay: allDay
-            });
-            n++;
-            switch (freq) {
-                case 'DAILY': cur.setDate(cur.getDate() + interval); break;
-                case 'WEEKLY': cur.setDate(cur.getDate() + 7 * interval); break;
-                case 'MONTHLY': cur.setMonth(cur.getMonth() + interval); break;
-                case 'YEARLY': cur.setFullYear(cur.getFullYear() + interval); break;
-                default: return instances;
-            }
-        }
-        return instances;
     }
 
     // --- SIBLING union-find (Nextcloud splits recurring series across UIDs) ---
@@ -111,87 +58,81 @@
         return { find: find, union: union };
     }
 
-    // --- Parse jCal with override handling ---
+    // --- Parse jCal and expand occurrences ---
 
-    function parseJCal(jcal) {
-        var components = jcal[2] || [];
+    function parseJCal(ICAL, jcal) {
         var now = new Date();
         var limit = new Date(now.getTime() + LOOKAHEAD_DAYS * 86400000);
+        var vevents = new ICAL.Component(jcal).getAllSubcomponents('vevent');
 
-        // Build series groups from related-to SIBLING links
+        // Group components by UID into master + RECURRENCE-ID overrides,
+        // and link sibling series via RELATED-TO;RELTYPE=SIBLING.
         var uf = makeUnionFind();
-        for (var s = 0; s < components.length; s++) {
-            if (components[s][0] !== 'vevent') continue;
-            var sProps = components[s][1];
-            var sUid = getProp(sProps, 'uid');
-            if (!sUid) continue;
-            uf.find(sUid[3]);
-            for (var k = 0; k < sProps.length; k++) {
-                if (sProps[k][0] === 'related-to' && sProps[k][1] && sProps[k][1].reltype === 'SIBLING') {
-                    uf.union(sUid[3], sProps[k][3]);
-                }
+        var series = {};
+
+        vevents.forEach(function (comp, i) {
+            var uid = comp.getFirstPropertyValue('uid');
+            var key = uid || ('no-uid-' + i);
+            if (uid) {
+                uf.find(uid);
+                comp.getAllProperties('related-to').forEach(function (prop) {
+                    if (String(prop.getParameter('reltype')).toUpperCase() === 'SIBLING') {
+                        uf.union(uid, prop.getFirstValue());
+                    }
+                });
             }
-        }
-
-        // Separate recurrence-id overrides from base events
-        var overrides = {}; // "uid|timestamp" → event
-        var bases = [];
-
-        for (var i = 0; i < components.length; i++) {
-            if (components[i][0] !== 'vevent') continue;
-            var props = components[i][1];
-            var ev = extractEvent(props);
-            if (!ev) continue;
-
-            var recId = getProp(props, 'recurrence-id');
-            if (recId) {
-                var recDate = parseDate(recId).date;
-                overrides[ev.uid + '|' + recDate.getTime()] = ev;
-            } else {
-                bases.push({ props: props, ev: ev });
-            }
-        }
+            if (!series[key]) series[key] = { master: null, overrides: [] };
+            if (comp.hasProperty('recurrence-id')) series[key].overrides.push(comp);
+            else series[key].master = comp;
+        });
 
         var events = [];
 
-        for (var j = 0; j < bases.length; j++) {
-            var base = bases[j];
-            var ev = base.ev;
-
-            // Cancelled base series → skip all instances
-            if (ev.status === 'CANCELLED') continue;
-
-            var rruleProp = getProp(base.props, 'rrule');
-            if (rruleProp) {
-                var rrule = rruleProp[3];
-                var instances = expandRecurrence(ev.start, ev.end, ev.allDay, rrule, limit);
-                instances.forEach(function (inst) {
-                    if (inst.start < now || inst.start > limit) return;
-                    var key = ev.uid + '|' + inst.start.getTime();
-                    var override = overrides[key];
-                    if (override) {
-                        events.push(override);
-                    } else {
-                        inst.uid = ev.uid;
-                        inst.summary = ev.summary;
-                        inst.location = ev.location;
-                        inst.url = ev.url;
-                        inst.status = ev.status;
-                        inst.color = ev.color;
-                        events.push(inst);
-                    }
-                });
-            } else if (ev.start >= now && ev.start <= limit) {
-                events.push(ev);
-            }
+        function add(item, startDate, endDate) {
+            var ev = toEvent(item, startDate, endDate);
+            if (ev.status === 'CANCELLED') return;
+            if (ev.start < now || ev.start > limit) return;
+            events.push(ev);
         }
+
+        Object.keys(series).forEach(function (key) {
+            var s = series[key];
+
+            // Overrides without their master in the export → standalone events
+            if (!s.master) {
+                s.overrides.forEach(function (comp) {
+                    var ev = new ICAL.Event(comp);
+                    add(ev, ev.startDate, ev.endDate);
+                });
+                return;
+            }
+
+            // Cancelled master → skip all instances
+            if (getStatus(s.master) === 'CANCELLED') return;
+
+            // Pass overrides explicitly, otherwise ical.js would relate
+            // every RECURRENCE-ID component in the calendar regardless of UID.
+            var event = new ICAL.Event(s.master, { exceptions: s.overrides });
+
+            if (!event.isRecurring()) {
+                add(event, event.startDate, event.endDate);
+                return;
+            }
+
+            var it = event.iterator();
+            var next;
+            for (var n = 0; n < MAX_OCCURRENCES && (next = it.next()); n++) {
+                if (next.toJSDate() > limit) break;
+                var details = event.getOccurrenceDetails(next);
+                add(details.item, details.startDate, details.endDate);
+            }
+        });
 
         events.sort(function (a, b) { return a.start - b.start; });
 
-        // Skip cancelled; keep only nearest instance per series (by SIBLING-grouped uid)
+        // Keep only nearest instance per series (by SIBLING-grouped uid)
         var seenSeries = {};
         events = events.filter(function (ev) {
-            if (ev.status === 'CANCELLED') return false;
             var sid = ev.uid ? uf.find(ev.uid) : '';
             if (sid && seenSeries[sid]) return false;
             if (sid) seenSeries[sid] = true;
@@ -251,11 +192,13 @@
         if (!container) return;
         var lang = document.documentElement.lang || 'cs';
 
-        fetch(CALENDAR_URL)
-            .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-            .then(function (jcal) { render(container, parseJCal(jcal), lang); })
+        Promise.all([
+            fetch(CALENDAR_URL).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+            import(ICAL_URL).then(function (mod) { return mod.default; })
+        ])
+            .then(function (res) { render(container, parseJCal(res[1], res[0]), lang); })
             .catch(function (err) {
-                console.warn('Calendar fetch failed:', err);
+                console.warn('Calendar failed:', err);
                 container.innerHTML =
                     '<a href="' + CALENDAR_LINK + '" target="_blank" rel="noopener" class="button">' +
                     '<i class="fas fa-calendar-alt"></i>' +

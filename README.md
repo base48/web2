@@ -73,7 +73,8 @@ Base48 is a community-driven hackerspace and maker workshop located in Brno, Cze
 │   ├── fonts.css           # Font declarations
 │   └── utilities.css       # Utility classes
 ├── js/                    # JavaScript files
-│   └── main.js             # Main JavaScript functionality
+│   ├── main.js             # Main JavaScript functionality
+│   └── calendar.js         # Upcoming events from the public Nextcloud calendar
 ├── img/                   # Images and assets
 │   ├── logo/               # Base48 logos
 │   ├── gallery/            # Photo gallery images
@@ -81,7 +82,8 @@ Base48 is a community-driven hackerspace and maker workshop located in Brno, Cze
 │   ├── frame/              # CRT frame images
 │   └── og/                 # Open Graph images
 └── vendor/                # Third-party assets
-    └── fa/                 # Font Awesome icons
+    ├── fa/                 # Font Awesome icons
+    └── ical/               # ical.js 2.2.1 (MPL-2.0), iCalendar parsing for calendar.js
 ```
 
 ## 🚀 Getting Started
