@@ -58,10 +58,21 @@
         return { find: find, union: union };
     }
 
+    // --- Visibility window ---
+
+    // Listed = starts today or later (today's events stay until midnight, even
+    // once they have started), or started earlier and is still running.
+    function isListed(ev, now, today, limit) {
+        if (ev.start > limit) return false;
+        if (ev.start >= today) return true;
+        return !!ev.end && ev.end > now;
+    }
+
     // --- Parse jCal and expand occurrences ---
 
     function parseJCal(ICAL, jcal) {
         var now = new Date();
+        var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         var limit = new Date(now.getTime() + LOOKAHEAD_DAYS * 86400000);
         var vevents = new ICAL.Component(jcal).getAllSubcomponents('vevent');
 
@@ -91,7 +102,7 @@
         function add(item, startDate, endDate) {
             var ev = toEvent(item, startDate, endDate);
             if (ev.status === 'CANCELLED') return;
-            if (ev.start < now || ev.start > limit) return;
+            if (!isListed(ev, now, today, limit)) return;
             events.push(ev);
         }
 
